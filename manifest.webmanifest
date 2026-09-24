@@ -1,0 +1,18 @@
+{
+  "name": "Gravity Trampoline: The Future",
+  "short_name": "GT Future",
+  "description": "Draw trampolines and bounce into the portal!",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101020",
+  "theme_color": "#101020",
+  "icons": [
+    {
+      "src": "futureicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
