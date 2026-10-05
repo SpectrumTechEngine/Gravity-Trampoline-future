@@ -127,7 +127,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div id="userDisplay">Player: <span id="userNameText">Player1</span> | Total Score: <span id="scoreText">0</span></div>
 
 <div id="instructions">
-Draw straight trampoline lines, then press Launch.
+Draw straight trampoline lines, then tap the sun or planet in the sky (or press Launch).
 Bounce the ball into the portal without touching the floor or the obstacles.
 </div>
 
@@ -237,6 +237,16 @@ function neonBackground(ctx, t, W, H, G) {
   g.addColorStop(0, "#171735"); g.addColorStop(1, "#101020");
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   stars(ctx, t, W, G, true);
+  // a retro neon sun low in the sky (tap it to launch)
+  ctx.save();
+  ctx.translate(690, 135);
+  ctx.shadowColor = "#ff4fa3"; ctx.shadowBlur = 28;
+  const sg = ctx.createLinearGradient(0, -46, 0, 46);
+  sg.addColorStop(0, "#fde047"); sg.addColorStop(.55, "#fb7185"); sg.addColorStop(1, "#c026d3");
+  ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, 46, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0; ctx.fillStyle = "#171735";
+  for (let i = 0; i < 5; i++) ctx.fillRect(-48, 8 + i * 8, 96, 2 + i * .8);
+  ctx.restore();
   // a glowing city skyline far away
   ctx.fillStyle = "#1e1b4b";
   for (let x = 0, i = 0; x < W; x += 38, i++) { const h = 30 + ((i * 53) % 70); ctx.fillRect(x, G - h, 30, h); }
@@ -412,6 +422,7 @@ window.GT_THEME = {
       id: "neon", name: "Neon Grid", emoji: "⚡",
       levels: NEON_LEVELS,
       drawBackground: neonBackground, drawFloor: neonFloor,
+      launcher: { x: 690, y: 135, r: 46, word: "sun", ring: "rgba(56,232,223,.95)" },
       drawObstacle: (ctx, o) => neonBar(ctx, o),
       floorLose: "zap", obstacleLose: "zap",
       floorColors: ["#ff4fa3", "#38e8df", "#ffffff"],
@@ -422,6 +433,7 @@ window.GT_THEME = {
       id: "nebula", name: "Nebula Drift", emoji: "🪐",
       levels: NEBULA_LEVELS,
       drawBackground: nebulaBackground, drawFloor: plasmaFloor, drawFloorFront: plasmaFront,
+      launcher: { x: 640, y: 120, r: 40, word: "planet", ring: "rgba(253,230,138,.95)" },
       drawObstacle: (ctx, o, t) => (o.type === "drone" ? drone(ctx, o, t) : asteroid(ctx, o, t)),
       floorLose: "swept", obstacleLose: "fall",
       floorColors: ["#6ee7b7", "#d1fae5", "#34d399"],
@@ -685,7 +697,7 @@ function resetLevel() {
   placeMovingObjects();
 
   winnerPopup.style.display = "none";
-  statusText.textContent = say("Draw a trampoline, then tap Launch.", "Draw a trampoline, then press Launch or hit SPACE.");
+  statusText.textContent = say(`Draw a trampoline, then tap the ${world().launcher ? world().launcher.word : "Launch button"} or Launch.`, "Draw a trampoline, then press Launch or hit SPACE.");
   updateUI();
   draw();
 }
@@ -1041,6 +1053,14 @@ function draw() {
   const w = world();
   const t = portalTime;
   w.drawBackground(ctx, t, W, H, GROUND_Y);
+  if (w.launcher && !launched && !won && !lost) {
+    const L = w.launcher, k = (Math.sin(t * 3.2) + 1) / 2;
+    ctx.save();
+    ctx.strokeStyle = L.ring || "rgba(255,255,255,.9)"; ctx.lineWidth = 3;
+    ctx.globalAlpha = .35 + .45 * k;
+    ctx.beginPath(); ctx.arc(L.x, L.y, L.r + 8 + k * 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
   w.drawFloor(ctx, t, W, H, GROUND_Y);
   T.drawPortal(ctx, portal, t);
   for (const o of obstacles) w.drawObstacle(ctx, o, t);
@@ -1058,7 +1078,11 @@ function draw() {
   ctx.fillText(w.emoji + " " + w.name.toUpperCase() + " · LEVEL " + (levelIndex + 1), 16, 28);
   if (!launched && !won && !lost) {
     ctx.font = "14px Arial, sans-serif";
-    ctx.fillText("Ball waiting for Launch", 16, 50);
+    const L = w.launcher;
+    ctx.fillText(L ? `Tap the ${L.word} to launch ${L.word === "planet" ? "🪐" : "☀️"}` : "Ball waiting for Launch", 16, 50);
+  } else if (w.launcher && (won || lost)) {
+    ctx.font = "14px Arial, sans-serif";
+    ctx.fillText(`Tap the ${w.launcher.word} ${won ? "for the next level" : "to try again"}`, 16, 50);
   }
 }
 
@@ -1168,9 +1192,16 @@ soundBtn.addEventListener("click", () => {
   if (soundOn) audio();
 });
 
+// The sun (or planet) in the sky is a launch button too: it is always on screen, even in fullscreen on a sideways phone
+function launcherHit(p) { const L = world().launcher; return !!L && distance(p, L) < L.r + 18; }
+let downAt = 0;
+
 canvas.addEventListener("pointerdown", e => {
-  if (launched || won || lost) return;
   const p = pointerPosition(e);
+  // after a win or a loss, the sun works like the Space key: next level, or try again
+  if ((won || lost) && launcherHit(p)) { if (won) handleNextLevel(); else resetLevel(); return; }
+  if (launched || won || lost) return;
+  downAt = performance.now();
   if (distance(p, ball) < BALL_RADIUS + 10 || distance(p, portal) < portal.r + 10) return;
   drawing = true; drawStart = p; pointerNow = p;
   canvas.setPointerCapture(e.pointerId);
@@ -1178,7 +1209,14 @@ canvas.addEventListener("pointerdown", e => {
 canvas.addEventListener("pointermove", e => { if (drawing) { pointerNow = pointerPosition(e); draw(); } });
 canvas.addEventListener("pointerup", e => {
   if (!drawing || !drawStart) return;
-  addLine(drawStart, pointerPosition(e));
+  const end = pointerPosition(e);
+  // a quick tap on the sun launches; a drag that starts there still draws a trampoline
+  if (distance(drawStart, end) < 12 && performance.now() - downAt < 600 && launcherHit(drawStart)) {
+    drawing = false; drawStart = null; pointerNow = null;
+    handleLaunch();
+    return;
+  }
+  addLine(drawStart, end);
   drawing = false; drawStart = null; pointerNow = null;
   draw();
 });
@@ -1207,5 +1245,7 @@ requestAnimationFrame(gameLoop);
 
 </script>
 
+<!-- Lets the app open offline once it has been visited, and be installed as an app -->
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>
