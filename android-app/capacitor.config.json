@@ -1,0 +1,10 @@
+{
+  "appId": "com.thespectrumtechengine.gravityfuture",
+  "appName": "Gravity Future",
+  "webDir": "www",
+  "backgroundColor": "#0f0c29",
+  "server": {
+    "url": "https://thespectrumtechengine.com/Gravity-Trampoline-future/",
+    "errorPath": "index.html"
+  }
+}
